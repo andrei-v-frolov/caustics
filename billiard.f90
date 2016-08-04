@@ -1,5 +1,5 @@
 ! $Id: billiard.f90,v 1.1 2013/03/18 03:09:47 frolov Exp frolov $
-! [compile with: ifort -xHOST -O3 -ip -r8 -fpp billiard.f90 polint.f]
+! [compile with: ifort -xHOST -O3 -ip -r8 -fpp billiard.f90 polint.f -L. -lcfitsio]
 ! ODE integration methods tested on a simple anharmonic oscillator
 
 program billiard; implicit none
@@ -41,11 +41,19 @@ integer, parameter :: s = 1
 
 integer i
 
-write (*,'(g)') "# OUTPUT: alpha, t, p, da/dp;"
+real(4) store(n,1000,0:500)
+real(4) deriv(n,1000,0:500)
+real :: scana(2) = (/ -11.0, -7.0 /)
+real :: lapse(2) = (/  0.0,  50.0 /)
 
 do i = 1,1000
-        call evolve(-11.0+i/250.0, 1e-3)
+        call evolve(scana(1)+(scana(2)-scana(1))*i/1000, 1e-3, store(:,i,:), deriv(:,i,:))
 end do
+
+call write2fits('smpout.fit', store, scana, lapse, &
+    (/ 'phi', 'chi', 'pip', 'pic', 'a', 'p' /), '(alpha,t)')
+call write2fits('derivs.fit', deriv, scana, lapse, &
+    (/ 'phi', 'chi', 'pip', 'pic', 'a', 'p' /), '(alpha,t)')
 
 contains
 
@@ -70,8 +78,9 @@ function width(bundle)
 end function width
 
 ! transformation Jacobian is P(t)/P(0) = dalpha/dy
-function dy(beam, eps)
+pure function dy(beam, eps)
         real beam(-s:s), eps, y0, dy
+        intent(in) beam, eps
         
         ! tuned to handle both linear and parabolic folds
         real, parameter :: w(-s:s) = (/ 0.3, 0.4, 0.3 /)
@@ -97,7 +106,8 @@ subroutine shrink(bundle, width, w)
 end subroutine shrink
 
 ! evolve phase space bundle around alpha trajectory
-subroutine evolve(alpha, da)
+subroutine evolve(alpha, da, store, deriv)
+        real(4), dimension(:,:), optional :: store, deriv
         real, value :: alpha, da
         real w0, bundle(n,-s:s)
         integer l, k
@@ -113,14 +123,15 @@ subroutine evolve(alpha, da)
         
         ! evolve the bundle, shrinking it if it gets too wide
         do l = 0,5000
-                if (mod(l,10) == 0) write (*,'(8g)') alpha, l*dt, &
-                        bundle($p$,0), (2.0*s*da)/dy(bundle($p$,:),0.0)
+                if (mod(l,10) == 0 .and. present(store)) store(:,l/10) = bundle(:,0)
+                if (mod(l,10) == 0 .and. present(deriv)) forall (i=1:n) deriv(i,l/10) = (2.0*s*da)/dy(bundle(i,:),0.0)
+                !write (*,'(16g)') alpha, l*dt, bundle(:,0), ((2.0*s*da)/dy(bundle(i,:),0.0), i=1,n)
                 do k = -s,s; call gl10(bundle(:,k), dt); end do
                 if (width(bundle) > 10.0*w0) call shrink(bundle, da, 0.05)
         end do
         
         ! flush the frame
-        write (*,'(g)') "", ""
+        ! write (*,'(g)') "", ""
 end subroutine evolve
 
 
@@ -214,5 +225,62 @@ subroutine gl10(y, dt)
         ! update the solution
         y = y + matmul(g,b)*dt
 end subroutine gl10
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! write array data into FITS file as sequence of image extensions
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+subroutine write2fits(file, array, xx, yy, vars, coords)
+        character(len=*) file, vars(:), coords
+        real(4) array(:,:,:); real(8) xx(2), yy(2)
+        optional xx, yy, vars, coords
+        
+        integer i, j, status, unit
+        integer :: hdus, naxis = 2, n(2), npix
+        integer :: bitpix = -32, group = 1, blocksize = -1
+        
+        ! data dimansions
+        hdus = size(array,1)
+        n(1) = size(array,2)
+        n(2) = size(array,3)
+        npix = n(1)*n(2)
+        
+        ! delete file if it already exists
+        open(unit=1234, iostat=status, file=file, status='old')
+        if (status == 0) close(1234, status='delete'); status = 0
+        
+        ! initialize FITS file
+        call ftgiou(unit, status)
+        call ftinit(unit, file, blocksize, status)
+        
+        ! write image extensions
+        do i = 1,hdus
+                call ftiimg(unit, bitpix, naxis, n, status)
+                call ftppre(unit, group, 1, npix, array(i,:,:), status)
+                
+                if (present(vars)) then
+                        if (present(coords)) then
+                                call ftpkys(unit, 'EXTNAME', vars(i)//coords, 'variable stored in extension', status)
+                        else
+                                call ftpkys(unit, 'EXTNAME', vars(i), 'variable stored in extension', status)
+                        end if
+                end if
+                if (present(xx)) then
+                        call ftpkyj(unit, 'CRPIX1', 1, 'x-axis origin pixel', status)
+                        call ftpkyd(unit, 'CRVAL1', xx(1), 14, 'x-axis origin coordinate', status)
+                        call ftpkyd(unit, 'CDELT1', (xx(2)-xx(1))/n(1), 14, 'x-axis increment', status)
+                end if
+                if (present(yy)) then
+                        call ftpkyj(unit, 'CRPIX2', 1, 'y-axis origin pixel', status)
+                        call ftpkyd(unit, 'CRVAL2', yy(1), 14, 'y-axis origin coordinate', status)
+                        call ftpkyd(unit, 'CDELT2', (yy(2)-yy(1))/n(2), 14, 'y-axis increment', status)
+                end if
+        end do
+        
+        ! clean up
+        call ftclos(unit, status)
+        call ftfiou(unit, status)
+end subroutine write2fits
 
 end
