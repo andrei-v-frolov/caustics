@@ -5,8 +5,9 @@ notes/*
 # ignore Fortran binaries
 *.out
 *.mod
+*.a
 
 # ignore data files
-data/*
+*.npz
 *.fit
 
