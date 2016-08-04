@@ -1,5 +1,5 @@
 ! $Id: billiard.f90,v 1.1 2013/03/18 03:09:47 frolov Exp frolov $
-! [compile with: ifort -xHOST -O3 -ipo -r8 -fpp billiard.f90 polint.f -L. -lcfitsio]
+! [compile with: ifort -xHOST -O3 -ipo -r8 -pc80 -fpp -heap-arrays 256 -qopenmp billiard.f90 polint.f -L. -lcfitsio -static-intel]
 ! ODE integration methods tested on a simple anharmonic oscillator
 
 program billiard; implicit none
@@ -45,16 +45,16 @@ integer, parameter :: xsize = 1000, ysize = 500
 real, parameter :: scana(2) = (/ -11.0, -7.0 /)
 real, parameter :: lapse(2) = (/  0.0,  50.0 /)
 
-integer i; real :: da = (scana(2)-scana(1))/(xsize-1), alpha
+integer i; real :: da = (scana(2)-scana(1))/(xsize-1)
 
 ! storage for trajectory data and its derivatives
-real(4) store(n,xsize,ysize)
-real(4) deriv(n,xsize,ysize)
+real(4), allocatable, dimension(:,:,:) :: store, deriv
+allocate( store(n,xsize,ysize), deriv(n,xsize,ysize) )
 
 ! scan initial conditions
+!$omp parallel do
 do i = 1,xsize
-        alpha = scana(1) + da*(i-1)
-        call evolve(alpha, da/(2*s+1), store(:,i,:), deriv(:,i,:))
+        call evolve(scana(1) + da*(i-1), da/(2*s+1), store(:,i,:), deriv(:,i,:))
 end do
 
 ! write out trajectory data and its derivatives in FITS format
