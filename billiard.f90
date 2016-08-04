@@ -15,12 +15,13 @@ integer, parameter :: phi = 1, chi = 2          ! symbolic aliases for scalar fi
 integer, parameter :: n = 2*(fields+1)          ! total dynamical system dimension
 
 ! parameters of the scalar field potential are defined here
-real, parameter :: lambda = 1.0, g2 = 1.875     ! scalar field potential
+real, parameter :: lambda = 9.0, nu = lambda - 1.0 ! scalar field potential
 real, parameter :: mu = 1.76274717403907543734  ! Floquet growth per period
 
 ! potential and its derivatives are inlined in ...step() routines
-#define Vx4(PHI,CHI) (lambda * (PHI)**2 + (2.0*g2) * (CHI)**2) * (PHI)**2
-#define M2I(PHI,CHI) (/ lambda*(PHI)**2 + g2*(CHI)**2, g2*(PHI)**2 /)
+#define R2(PHI,CHI)  ( (PHI)**2 + (CHI)**2 )
+#define Vx4(PHI,CHI) ( lambda*R2(PHI,CHI)**2 - nu*((PHI)**4 - 10.0*(PHI)**2*(CHI)**2 + 5.0*(CHI)**4) * (PHI)/sqrt(R2(PHI,CHI)) )
+#define M2I(PHI,CHI) (/ lambda*R2(PHI,CHI) - (nu/4.0)*(4.0*(PHI)**5 - 15.0*(PHI)**3*(CHI)**2 - 30.0*(PHI)*(CHI)**4 + 5.0*(CHI)**6/(PHI))/R2(PHI,CHI)**1.5, lambda*R2(PHI,CHI) - (nu/4.0)*(PHI)*(15.0*(CHI)**4 + 10.0*(PHI)**2*(CHI)**2 - 21.0*(PHI)**4)/R2(PHI,CHI)**1.5 /)
 
 ! state vector packing (implemented as preprocessor macros)
 #define $fi$ 1:2
