@@ -1,0 +1,12 @@
+# ignore backups and source images
+attic/*
+notes/*
+
+# ignore Fortran binaries
+*.out
+*.mod
+
+# ignore data files
+data/*
+*.fit
+
