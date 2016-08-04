@@ -1,4 +1,4 @@
-! $Id$
+! $Id: billiard.f90,v 1.1 2013/03/18 03:09:47 frolov Exp frolov $
 ! [compile with: ifort -xHOST -O3 -ip -r8 -fpp billiard.f90 polint.f]
 ! ODE integration methods tested on a simple anharmonic oscillator
 
@@ -41,7 +41,7 @@ integer, parameter :: s = 1
 
 integer i
 
-write (*,'(g)') "# OUTPUT: alpha, t, p, dp;"
+write (*,'(g)') "# OUTPUT: alpha, t, p, da/dp;"
 
 do i = 1,1000
         call evolve(-11.0+i/250.0, 1e-3)
@@ -68,6 +68,18 @@ function width(bundle)
         ! return width
         width = sqrt(sum(gii*dy*dy))
 end function width
+
+! transformation Jacobian is P(t)/P(0) = dalpha/dy
+function dy(beam, eps)
+        real beam(-s:s), eps, y0, dy
+        
+        ! tuned to handle both linear and parabolic folds
+        real, parameter :: w(-s:s) = (/ 0.3, 0.4, 0.3 /)
+        real, parameter :: a(-s:s) = (/ 2.0, 1.0, 2.0 /)
+        
+        ! beam width is regularized by epsilon from below
+        y0 = sum(w*beam); dy = sqrt(eps**2 + sum(a*(beam(:)-y0)**2))
+end function dy
 
 ! shrink phase space bundle
 subroutine shrink(bundle, width, w)
@@ -102,7 +114,7 @@ subroutine evolve(alpha, da)
         ! evolve the bundle, shrinking it if it gets too wide
         do l = 0,5000
                 if (mod(l,10) == 0) write (*,'(8g)') alpha, l*dt, &
-                        bundle($p$,0), (bundle($p$,s)-bundle($p$,-s))/(2.0*s*da)
+                        bundle($p$,0), (2.0*s*da)/dy(bundle($p$,:),0.0)
                 do k = -s,s; call gl10(bundle(:,k), dt); end do
                 if (width(bundle) > 10.0*w0) call shrink(bundle, da, 0.05)
         end do
