@@ -29,8 +29,8 @@ y0 = hdu[0].header['CRVAL2']
 dx = hdu[0].header['CDELT1']
 dy = hdu[0].header['CDELT2']
 
-x = (x0+dx) + arange(nx)*dx
-y = (y0+dy) + arange(ny)*dy
+x = x0 + arange(nx)*dx
+y = y0 + arange(ny)*dy
 
 X, Y = meshgrid(x, y)
 
@@ -41,17 +41,17 @@ for i in range(0,ny):
 	q[i,:] = q[i,:] - sum(q[i,:])/nx
 
 # smooth in time direction
-w = kaiser(ny/4+1, 12.0)
+#w = kaiser(ny/4+1, 12.0)
 #for j in range(0,nx):
 #	q[:,j] = convolve(q[:,j], w, mode='same')
 
 # smooth in parameter direction
-w = kaiser(17, 12.0)
+#w = kaiser(17, 12.0)
 #for i in range(0,ny):
 #	q[i,:] = convolve(q[i,:], w, mode='same')
 
 # colormap for plotting
-b = max(-q.min(), q.max())/4.0; Q = q #/sqrt(b*b + q*q)
+b = max(-q.min(), q.max())/4.0; Q = q/sqrt(b*b + q*q)
 
 # create the figure
 figure(figsize=(10,8), frameon=False)
@@ -65,8 +65,7 @@ imshow(Q, extent=(x[0],x[-1],y[0],y[-1]), origin='lower', aspect=dx/dy, cmap=c, 
 data3d = np.load('data/slice-1875.npz')
 plot(data3d['x'], 50.0+data3d['dlna'], 'k-')
 
-xticks(arange(5)-11.0)
-#yticks(arange(7)-3.0)
+#xticks(arange(5)-11.0)
 
 xlabel('$\\alpha \equiv \ln(\chi_0/\phi_0)/\mu_0T$')
 ylabel('$\\tau$')

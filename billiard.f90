@@ -1,5 +1,5 @@
 ! $Id: billiard.f90,v 1.1 2013/03/18 03:09:47 frolov Exp frolov $
-! [compile with: ifort -xHOST -O3 -ip -r8 -fpp billiard.f90 polint.f -L. -lcfitsio]
+! [compile with: ifort -xHOST -O3 -ipo -r8 -fpp billiard.f90 polint.f -L. -lcfitsio]
 ! ODE integration methods tested on a simple anharmonic oscillator
 
 program billiard; implicit none
@@ -18,7 +18,7 @@ integer, parameter :: n = 2*(fields+1)          ! total dynamical system dimensi
 real, parameter :: lambda = 1.0, g2 = 1.875     ! scalar field potential
 real, parameter :: mu = 1.76274717403907543734  ! Floquet growth per period
 
-! potential and its derivatives are inlined in ...step() routines
+! potential and its derivatives are inlined in evolution routines
 #define Vx4(PHI,CHI) (lambda * (PHI)**2 + (2.0*g2) * (CHI)**2) * (PHI)**2
 #define M2I(PHI,CHI) (/ lambda*(PHI)**2 + g2*(CHI)**2, g2*(PHI)**2 /)
 
@@ -37,19 +37,27 @@ real, parameter :: dphi0 = -2.736358272992573
 ! Main code
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+! bundle size is 2*s+1 trajectories
 integer, parameter :: s = 1
 
-integer i
+! ranges of parameter scan and evolution span
+integer, parameter :: xsize = 1000, ysize = 500
+real, parameter :: scana(2) = (/ -11.0, -7.0 /)
+real, parameter :: lapse(2) = (/  0.0,  50.0 /)
 
-real(4) store(n,1000,0:500)
-real(4) deriv(n,1000,0:500)
-real :: scana(2) = (/ -11.0, -7.0 /)
-real :: lapse(2) = (/  0.0,  50.0 /)
+integer i; real :: da = (scana(2)-scana(1))/(xsize-1), alpha
 
-do i = 1,1000
-        call evolve(scana(1)+(scana(2)-scana(1))*i/1000, 1e-3, store(:,i,:), deriv(:,i,:))
+! storage for trajectory data and its derivatives
+real(4) store(n,xsize,ysize)
+real(4) deriv(n,xsize,ysize)
+
+! scan initial conditions
+do i = 1,xsize
+        alpha = scana(1) + da*(i-1)
+        call evolve(alpha, da/(2*s+1), store(:,i,:), deriv(:,i,:))
 end do
 
+! write out trajectory data and its derivatives in FITS format
 call write2fits('smpout.fit', store, scana, lapse, &
     (/ 'phi', 'chi', 'pip', 'pic', 'a', 'p' /), '(alpha,t)')
 call write2fits('derivs.fit', deriv, scana, lapse, &
@@ -59,7 +67,7 @@ contains
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! ...
+! Bundle evolution in phase space
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! width of the phase space bundle
@@ -110,10 +118,11 @@ subroutine evolve(alpha, da, store, deriv)
         real(4), dimension(:,:), optional :: store, deriv
         real, value :: alpha, da
         real w0, bundle(n,-s:s)
-        integer l, k
+        integer i, k, l, ll, tt
         
         ! machine precision accuracy
         real, parameter :: dt = 0.01
+        tt = (lapse(2)-lapse(1))/dt
         
         ! initialize phase space bundle
         do k = -s,s; call inity(bundle(:,k), alpha+k*da); end do
@@ -122,16 +131,18 @@ subroutine evolve(alpha, da, store, deriv)
         w0 = width(bundle)
         
         ! evolve the bundle, shrinking it if it gets too wide
-        do l = 0,5000
-                if (mod(l,10) == 0 .and. present(store)) store(:,l/10) = bundle(:,0)
-                if (mod(l,10) == 0 .and. present(deriv)) forall (i=1:n) deriv(i,l/10) = (2.0*s*da)/dy(bundle(i,:),0.0)
-                !write (*,'(16g)') alpha, l*dt, bundle(:,0), ((2.0*s*da)/dy(bundle(i,:),0.0), i=1,n)
+        do l = 0,tt
+                ! store trajectory data if requested
+                if (mod(l,tt/(ysize-1)) == 0) then
+                        ll = l*(ysize-1)/tt + 1
+                        if (present(store)) store(:,ll) = bundle(:,0)
+                        if (present(deriv)) forall (i=1:n) deriv(i,ll) = (2.0*s*da)/dy(bundle(i,:),0.0)
+                end if
+                
+                ! evolve and shrink the bundle if it grew too much
                 do k = -s,s; call gl10(bundle(:,k), dt); end do
                 if (width(bundle) > 10.0*w0) call shrink(bundle, da, 0.05)
         end do
-        
-        ! flush the frame
-        ! write (*,'(g)') "", ""
 end subroutine evolve
 
 
