@@ -41,7 +41,7 @@ real, parameter :: dphi0 = -2.736358272992573
 integer, parameter :: s = 1
 
 ! ranges of parameter scan and evolution span
-integer, parameter :: xsize = 1000, ysize = 500
+integer, parameter :: xsize = 1001, ysize = 501
 real, parameter :: scana(2) = (/ -11.0, -7.0 /)
 real, parameter :: lapse(2) = (/  0.0,  50.0 /)
 
@@ -75,14 +75,10 @@ function width(bundle)
         real width, bundle(n,-s:s), gii(n), dy(n), a2
         
         ! reference trajectory and displacement
-        a2 = bundle($a$,0)**2
         dy = bundle(:,s) - bundle(:,-s)
         
-        ! phase space metric
-        gii = (/ a2, a2, 1.0/a2, 1.0/a2, 1.0, 1.0 /)
-        
         ! return width
-        width = sqrt(sum(gii*dy*dy))
+        width = sqrt(sum(dy*dy))
 end function width
 
 ! transformation Jacobian is P(t)/P(0) = dalpha/dy
@@ -163,36 +159,41 @@ subroutine inity(y, alpha)
         H2 = H2 + dchi0**2/6.0
         
         ! initial state vector
-        y = (/ phi0, chi0, dphi0, dchi0, 1.0, -6.0*sqrt(H2) /)
+        y = (/ phi0, chi0, dphi0, dchi0, 1.0, -6.0*sqrt(H2) - phi0*dphi0 - chi0*dchi0 /)
 end subroutine inity
 
 ! equations of motion dy/dt = f(y)
 subroutine evalf(y, f)
-        real, target :: y(n), f(n); real, pointer :: fi(:), pi(:), a, p
+        real y(n), f(n), zeta
         
         ! unpack dynamical system vector
-        fi => y($fi$); pi => y($pi$); a => y($a$); p => y($p$)
+        associate(fi => y($fi$), pi => y($pi$), a => y($a$), p => y($p$))
         
         ! Hamiltonian equations of motion
-        f($fi$) = pi/a**2; f($pi$) = -a**4 * M2I(fi(phi),fi(chi)) * fi
-        f($a$) = -p/6.0; f($p$) = sum(pi**2)/a**3 - Vx4(fi(phi),fi(chi))*a**3
+        zeta = (a*p + sum(fi*pi))/a**2/6.0
+        f($fi$) = pi - zeta*fi; f($a$) = -zeta*a
+        f($pi$) = zeta*pi - M2I(fi(phi),fi(chi)) * fi
+        f($p$) = -zeta*sum(fi*pi)/a
+        
+        end associate
 end subroutine evalf
 
 ! Hamiltonian constraint violation
 function omegak(y)
-        real, target :: y(n); real, pointer :: fi(:), pi(:), a, p
-        real omegak, P2, KE, PE
+        real y(n), omegak, P2, KE, PE
         
         ! unpack dynamical system vector
-        fi => y($fi$); pi => y($pi$); a => y($a$); p => y($p$)
+        associate(fi => y($fi$), pi => y($pi$), a => y($a$), p => y($p$))
         
         ! Hamiltonian pieces
-        P2 = p**2/12.0
-        KE = sum(pi**2)/a**2/2.0
-        PE = Vx4(fi(phi),fi(chi))*a**4/4.0
+        P2 = (p + sum(fi*pi)/a)**2/12.0
+        KE = sum(pi**2)/2.0
+        PE = Vx4(fi(phi),fi(chi))/4.0
         
         ! residual curvature
         omegak = (KE+PE)/P2 - 1.0
+        
+        end associate
 end function omegak
 
 
