@@ -168,23 +168,23 @@ end subroutine inity
 
 ! equations of motion dy/dt = f(y)
 subroutine evalf(y, f)
-        real, target :: y(n), f(n); real, pointer :: fi(:), pi(:), a, p
+        real y(n), f(n)
         
         ! unpack dynamical system vector
-        fi => y($fi$); pi => y($pi$); a => y($a$); p => y($p$)
+        associate(fi => y($fi$), pi => y($pi$), a => y($a$), p => y($p$))
         
         ! Hamiltonian equations of motion
         f($fi$) = pi/a**2; f($pi$) = -a**4 * M2I(fi(phi),fi(chi)) * fi
         f($a$) = -p/6.0; f($p$) = sum(pi**2)/a**3 - Vx4(fi(phi),fi(chi))*a**3
+        end associate
 end subroutine evalf
 
 ! Hamiltonian constraint violation
 function omegak(y)
-        real, target :: y(n); real, pointer :: fi(:), pi(:), a, p
-        real omegak, P2, KE, PE
+        real y(n), omegak, P2, KE, PE
         
         ! unpack dynamical system vector
-        fi => y($fi$); pi => y($pi$); a => y($a$); p => y($p$)
+        associate(fi => y($fi$), pi => y($pi$), a => y($a$), p => y($p$))
         
         ! Hamiltonian pieces
         P2 = p**2/12.0
@@ -193,6 +193,7 @@ function omegak(y)
         
         ! residual curvature
         omegak = (KE+PE)/P2 - 1.0
+        end associate
 end function omegak
 
 
