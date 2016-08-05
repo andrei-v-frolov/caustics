@@ -176,6 +176,7 @@ subroutine evalf(y, f)
         ! Hamiltonian equations of motion
         f($fi$) = pi/a**2; f($pi$) = -a**4 * M2I(fi(phi),fi(chi)) * fi
         f($a$) = -p/6.0; f($p$) = sum(pi**2)/a**3 - Vx4(fi(phi),fi(chi))*a**3
+        
         end associate
 end subroutine evalf
 
@@ -193,6 +194,7 @@ function omegak(y)
         
         ! residual curvature
         omegak = (KE+PE)/P2 - 1.0
+        
         end associate
 end function omegak
 
