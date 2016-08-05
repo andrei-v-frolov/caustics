@@ -12,8 +12,9 @@ matplotlib.use('macosx' if file is None else 'PDF')
 
 import pyfits
 import numpy as np
-import scipy.stats
+#import scipy.stats
 from pylab import *
+from scipy.signal import medfilt
 
 # load trajectory data
 hdu = pyfits.open('smpout.fit')
@@ -55,14 +56,22 @@ np.putmask(q, np.isinf(q), 0.0)
 
 ny,nx = q.shape
 
+# antialias using median filter
+osy = ny/500; osx = nx/1000
+
+if (osy != 1 or osx != 1):
+	aakernel = [(osy & (~1)) + 1, (osx & (~1)) + 1]
+	q = medfilt(q, aakernel)[::osy,::osx]; ny,nx = q.shape
+	print("Antialiased with median kernel %s; output size is (%i,%i) pixels" % (aakernel, ny,nx))
+
 # data extent and meshes
 x0 = hdu[0].header['CRVAL1']
 y0 = hdu[0].header['CRVAL2']
 dx = hdu[0].header['CDELT1']
 dy = hdu[0].header['CDELT2']
 
-x = x0 + arange(nx)*dx
-y = y0 + arange(ny)*dy
+x = x0 + arange(nx)*dx*osx
+y = y0 + arange(ny)*dy*osy
 
 X, Y = meshgrid(x, y)
 
@@ -115,7 +124,7 @@ for case in switch(expr):
 # create the figure
 figure(figsize=(10,8), frameon=False)
 c = matplotlib.colors.LinearSegmentedColormap.from_list("difference", gradient)
-imshow(Q, extent=(x[0],x[-1],y[0],y[-1]), origin='lower', aspect=dx/dy, cmap=c, vmin=-1.0, vmax=1.0, interpolation='none')
+imshow(Q, extent=(x[0],x[-1],y[0],y[-1]), origin='lower', aspect=(osx*dx)/(osy*dy), cmap=c, vmin=-1.0, vmax=1.0, interpolation='none')
 #colorbar(shrink=0.585)
 #contour(X, Y, R, 32, cmap=cm.jet)
 #contour(X, Y, q, [0.0], colors='white', linewidths=2.0)

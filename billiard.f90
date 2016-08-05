@@ -41,7 +41,7 @@ real, parameter :: dphi0 = -2.736358272992573
 integer, parameter :: s = 1
 
 ! ranges of parameter scan and evolution span
-integer, parameter :: xsize = 1001, ysize = 501
+integer, parameter :: xsize = 8001, ysize = 1001
 real, parameter :: scana(2) = (/ -11.0, -7.0 /)
 real, parameter :: lapse(2) = (/  0.0,  50.0 /)
 
