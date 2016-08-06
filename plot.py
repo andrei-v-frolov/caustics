@@ -79,11 +79,11 @@ hdu.close(); pdf.close()
 
 # high-pass filter in parameter direction?
 for case in switch(expr):
-	if case("never"):
+	if case("lna"):
 		for i in range(0,ny):
 			q[i,:] = q[i,:] - sum(q[i,:])/nx
 		break
-	if case("lna", "p"):
+	if case("p"):
 		w = kaiser(nx/4+1, 12.0)
 		v = convolve(np.ones(nx), w, mode='same')
 		for i in range(0,ny):
@@ -109,10 +109,18 @@ for case in switch(expr):
 		break
 
 # remap extreme values
-b = max(-q.min(), q.max())
+
 for case in switch(expr):
-	if case("phi","chi","pip", "pic"): Q = q/b; break
-	if case(): Q = q/sqrt(b*b/16.0 + q*q); break
+	if case("phi","chi","pip", "pic"):
+		b = max(-q.min(), q.max())
+		Q = q/b; break
+	if case("lna", "p"):
+		qmin,qmed,qmax = np.percentile(q, [1.0, 50.0, 99.0])
+		b = max(qmed-qmin, qmax-qmed); q = q-qmed
+		Q = q/sqrt(b*b + q*q); break
+	if case():
+		b = max(-q.min(), q.max())
+		Q = q/sqrt(b*b/16.0 + q*q)
 
 # colormap for plotting
 for case in switch(expr):
