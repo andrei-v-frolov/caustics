@@ -10,8 +10,12 @@ file = argv[2] if len(argv) > 2 else None
 import matplotlib
 matplotlib.use('macosx' if file is None else 'PDF')
 
-import pyfits
+try:
+	import astropy.io.fits as pyfits
+except ImportError:
+	import pyfits
 import numpy as np
+
 #import scipy.stats
 from pylab import *
 from scipy.signal import medfilt
