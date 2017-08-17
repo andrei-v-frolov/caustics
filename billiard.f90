@@ -20,7 +20,7 @@ real, parameter :: mu = 1.76274717403907543734  ! Floquet growth per period
 
 ! potential and its derivatives are inlined in evolution routines
 #define Vx4(PHI,CHI) (lambda * (PHI)**2 + (2.0*g2) * (CHI)**2) * (PHI)**2
-#define M2I(PHI,CHI) (/ lambda*(PHI)**2 + g2*(CHI)**2, g2*(PHI)**2 /)
+#define M2I(PHI,CHI) [lambda*(PHI)**2 + g2*(CHI)**2, g2*(PHI)**2]
 
 ! state vector packing (implemented as preprocessor macros)
 #define $fi$ 1:2
@@ -42,8 +42,8 @@ integer, parameter :: s = 1
 
 ! ranges of parameter scan and evolution span
 integer, parameter :: xsize = 8001, ysize = 1001
-real, parameter :: scana(2) = (/ -11.0, -7.0 /)
-real, parameter :: lapse(2) = (/  0.0,  50.0 /)
+real, parameter :: scana(2) = [-11.0, -7.0]
+real, parameter :: lapse(2) = [  0.0, 50.0]
 
 integer i; real :: da = (scana(2)-scana(1))/(xsize-1)
 
@@ -59,9 +59,9 @@ end do
 
 ! write out trajectory data and its derivatives in FITS format
 call write2fits('smpout.fit', store, scana, lapse, &
-    (/ 'phi', 'chi', 'pip', 'pic', 'a', 'p' /), '(alpha,t)')
+    ['phi', 'chi', 'pip', 'pic', 'a', 'p'], '(alpha,t)')
 call write2fits('derivs.fit', deriv, scana, lapse, &
-    (/ 'phi', 'chi', 'pip', 'pic', 'a', 'p' /), '(alpha,t)')
+    ['phi', 'chi', 'pip', 'pic', 'a', 'p'], '(alpha,t)')
 
 contains
 
@@ -79,7 +79,7 @@ function width(bundle)
         dy = bundle(:,s) - bundle(:,-s)
         
         ! phase space metric
-        gii = (/ a2, a2, 1.0/a2, 1.0/a2, 1.0, 1.0 /)
+        gii = [a2, a2, 1.0/a2, 1.0/a2, 1.0, 1.0]
         
         ! return width
         width = sqrt(sum(gii*dy*dy))
@@ -91,8 +91,8 @@ pure function dy(beam, eps)
         intent(in) beam, eps
         
         ! tuned to handle both linear and parabolic folds
-        real, parameter :: w(-s:s) = (/ 0.3, 0.4, 0.3 /)
-        real, parameter :: a(-s:s) = (/ 2.0, 1.0, 2.0 /)
+        real, parameter :: w(-s:s) = [0.3, 0.4, 0.3]
+        real, parameter :: a(-s:s) = [2.0, 1.0, 2.0]
         
         ! beam width is regularized by epsilon from below
         y0 = sum(w*beam); dy = sqrt(eps**2 + sum(a*(beam(:)-y0)**2))
@@ -102,7 +102,7 @@ end function dy
 subroutine shrink(bundle, width, w)
         real width, w, e; integer i, k
         real bundle(n,-s:s), shrunk(n,-s:s)
-        real, parameter :: x(-s:s) = (/ -s:s /)
+        real, parameter :: x(-s:s) = [-s:s]
         
         ! resample the bundle
         do i = 1,n; do k = -s,s
@@ -163,7 +163,7 @@ subroutine inity(y, alpha)
         H2 = H2 + dchi0**2/6.0
         
         ! initial state vector
-        y = (/ phi0, chi0, dphi0, dchi0, 1.0, -6.0*sqrt(H2) /)
+        y = [phi0, chi0, dphi0, dchi0, 1.0, -6.0*sqrt(H2)]
 end subroutine inity
 
 ! equations of motion dy/dt = f(y)
@@ -209,7 +209,7 @@ subroutine gl10(y, dt)
         real y(n), g(n,s), dt; integer i, k
         
         ! Butcher tableau for 8th order Gauss-Legendre method
-        real, parameter :: a(s,s) = (/ &
+        real, parameter :: a(s,s) = [ &
                   0.5923172126404727187856601017997934066Q-1, -1.9570364359076037492643214050884060018Q-2, &
                   1.1254400818642955552716244215090748773Q-2, -0.5593793660812184876817721964475928216Q-2, &
                   1.5881129678659985393652424705934162371Q-3,  1.2815100567004528349616684832951382219Q-1, &
@@ -222,11 +222,11 @@ subroutine gl10(y, dt)
                   1.1965716762484161701032287870890954823Q-1, -0.9687563141950739739034827969555140871Q-2, &
                   1.1687532956022854521776677788936526508Q-1,  2.4490812891049541889746347938229502468Q-1, &
                   2.7319004362580148889172820022935369566Q-1,  2.5888469960875927151328897146870315648Q-1, &
-                  0.5923172126404727187856601017997934066Q-1 /)
-        real, parameter ::   b(s) = (/ &
+                  0.5923172126404727187856601017997934066Q-1]
+        real, parameter ::   b(s) = [ &
                   1.1846344252809454375713202035995868132Q-1,  2.3931433524968323402064575741781909646Q-1, &
                   2.8444444444444444444444444444444444444Q-1,  2.3931433524968323402064575741781909646Q-1, &
-                  1.1846344252809454375713202035995868132Q-1 /)
+                  1.1846344252809454375713202035995868132Q-1]
         
         ! iterate trial steps
         g = 0.0; do k = 1,16
