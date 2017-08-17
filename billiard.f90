@@ -275,20 +275,20 @@ subroutine write2fits(file, array, xx, yy, vars, coords)
                 
                 if (present(vars)) then
                         if (present(coords)) then
-                                call ftpkys(unit, 'EXTNAME', vars(i)//coords, 'variable stored in extension', status)
+                                call ftpkys(unit, 'EXTNAME', trim(vars(i))//coords, 'variable stored in extension', status)
                         else
-                                call ftpkys(unit, 'EXTNAME', vars(i), 'variable stored in extension', status)
+                                call ftpkys(unit, 'EXTNAME', trim(vars(i)), 'variable stored in extension', status)
                         end if
                 end if
                 if (present(xx)) then
                         call ftpkyj(unit, 'CRPIX1', 1, 'x-axis origin pixel', status)
                         call ftpkyd(unit, 'CRVAL1', xx(1), 14, 'x-axis origin coordinate', status)
-                        call ftpkyd(unit, 'CDELT1', (xx(2)-xx(1))/n(1), 14, 'x-axis increment', status)
+                        call ftpkyd(unit, 'CDELT1', (xx(2)-xx(1))/(n(1)-1), 14, 'x-axis increment', status)
                 end if
                 if (present(yy)) then
                         call ftpkyj(unit, 'CRPIX2', 1, 'y-axis origin pixel', status)
                         call ftpkyd(unit, 'CRVAL2', yy(1), 14, 'y-axis origin coordinate', status)
-                        call ftpkyd(unit, 'CDELT2', (yy(2)-yy(1))/n(2), 14, 'y-axis increment', status)
+                        call ftpkyd(unit, 'CDELT2', (yy(2)-yy(1))/(n(2)-1), 14, 'y-axis increment', status)
                 end if
         end do
         
