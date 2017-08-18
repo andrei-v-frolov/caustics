@@ -40,6 +40,10 @@ J_pic = pdf[3].data
 J_a   = pdf[4].data
 J_p   = pdf[5].data
 
+# load Kolmogorov-Sinai entropy
+kse = pyfits.open('entropy.fit')
+S   = kse[0].data
+
 # variable being plotted
 for case in switch(expr):
 	if case("phi"): q = a*phi; break
@@ -54,6 +58,8 @@ for case in switch(expr):
 	if case("lnF(pic)"): q = -np.log(1.0/np.square(J_pic) + 1.0e-16)/2.0; break
 	if case("lnF(a)"):   q = -np.log(1.0/np.square(J_a)   + 1.0e-16)/2.0; break
 	if case("lnF(p)"):   q = -np.log(1.0/np.square(J_p)   + 1.0e-16)/2.0; break
+	if case("entropy"):  q = np.cumsum(S, axis=0); break
+	if case("lyapunov"): q = S; break
 
 np.putmask(q, np.isnan(q), 0.0)
 np.putmask(q, np.isinf(q), 0.0)
@@ -79,7 +85,7 @@ y = y0 + arange(ny)*dy*osy
 
 X, Y = meshgrid(x, y)
 
-hdu.close(); pdf.close()
+hdu.close(); pdf.close(); kse.close()
 
 # high-pass filter in parameter direction?
 for case in switch(expr):
@@ -87,7 +93,7 @@ for case in switch(expr):
 		for i in range(0,ny):
 			q[i,:] = q[i,:] - sum(q[i,:])/nx
 		break
-	if case("p"):
+	if case("p","entropy"):
 		w = kaiser(nx/4+1, 12.0)
 		v = convolve(np.ones(nx), w, mode='same')
 		for i in range(0,ny):
@@ -115,10 +121,10 @@ for case in switch(expr):
 # remap extreme values
 
 for case in switch(expr):
-	if case("phi","chi","pip", "pic"):
+	if case("phi","chi","pip","pic","lyapunov"):
 		b = max(-q.min(), q.max())
 		Q = q/b; break
-	if case("lna", "p"):
+	if case("lna","p","entropy"):
 		qmin,qmed,qmax = np.percentile(q, [1.0, 50.0, 99.0])
 		b = max(qmed-qmin, qmax-qmed); q = q-qmed
 		Q = q/sqrt(b*b + q*q); break

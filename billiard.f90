@@ -1,5 +1,5 @@
 ! $Id: billiard.f90,v 1.1 2013/03/18 03:09:47 frolov Exp frolov $
-! [compile with: ifort -xHOST -O3 -ipo -r8 -pc80 -fpp -heap-arrays 256 -qopenmp billiard.f90 polint.f -L. -lcfitsio -static-intel]
+! [compile with: ifort -xHOST -O3 -ipo -r8 -pc80 -fpp -heap-arrays 256 -qopenmp billiard.f90 polint.f -L. -lcfitsio -lmkl_rt]
 ! ODE integration methods tested on a simple anharmonic oscillator
 
 program billiard; implicit none
@@ -21,6 +21,7 @@ real, parameter :: mu = 1.76274717403907543734  ! Floquet growth per period
 ! potential and its derivatives are inlined in evolution routines
 #define Vx4(PHI,CHI) (lambda * (PHI)**2 + (2.0*g2) * (CHI)**2) * (PHI)**2
 #define M2I(PHI,CHI) [lambda*(PHI)**2 + g2*(CHI)**2, g2*(PHI)**2]
+#define M2D(PHI,CHI) [(3.0*lambda)*(PHI)**2 + g2*(CHI)**2, (2.0*g2)*(PHI)*(CHI), (2.0*g2)*(PHI)*(CHI), g2*(PHI)**2]
 
 ! state vector packing (implemented as preprocessor macros)
 #define $fi$ 1:2
@@ -48,13 +49,13 @@ real, parameter :: lapse(2) = [  0.0, 50.0]
 integer i; real :: da = (scana(2)-scana(1))/(xsize-1)
 
 ! storage for trajectory data and its derivatives
-real(4), allocatable, dimension(:,:,:) :: store, deriv
-allocate( store(n,xsize,ysize), deriv(n,xsize,ysize) )
+real(4), allocatable, dimension(:,:,:) :: store, deriv, eigen
+allocate( store(n,xsize,ysize), deriv(n,xsize,ysize), eigen(1,xsize,ysize) )
 
 ! scan initial conditions
 !$omp parallel do
 do i = 1,xsize
-        call evolve(scana(1) + da*(i-1), da/(2*s+1), store(:,i,:), deriv(:,i,:))
+        call evolve(scana(1) + da*(i-1), da/(2*s+1), store(:,i,:), deriv(:,i,:), eigen(:,i,:))
 end do
 
 ! write out trajectory data and its derivatives in FITS format
@@ -62,6 +63,7 @@ call write2fits('smpout.fit', store, scana, lapse, &
     ['phi', 'chi', 'pip', 'pic', 'a', 'p'], '(alpha,t)')
 call write2fits('derivs.fit', deriv, scana, lapse, &
     ['phi', 'chi', 'pip', 'pic', 'a', 'p'], '(alpha,t)')
+call write2fits('entropy.fit', eigen, scana, lapse, ['entropy'], '(alpha,t)')
 
 contains
 
@@ -114,8 +116,8 @@ subroutine shrink(bundle, width, w)
 end subroutine shrink
 
 ! evolve phase space bundle around alpha trajectory
-subroutine evolve(alpha, da, store, deriv)
-        real(4), dimension(:,:), optional :: store, deriv
+subroutine evolve(alpha, da, store, deriv, eigen)
+        real(4), dimension(:,:), optional :: store, deriv, eigen
         real, value :: alpha, da
         real w0, bundle(n,-s:s)
         integer i, k, l, ll, tt
@@ -136,6 +138,7 @@ subroutine evolve(alpha, da, store, deriv)
                 if (mod(l,tt/(ysize-1)) == 0) then
                         ll = l*(ysize-1)/tt + 1
                         if (present(store)) store(:,ll) = bundle(:,0)
+                        if (present(eigen)) eigen(1,ll) = entropy(bundle(:,0))
                         if (present(deriv)) forall (i=1:n) deriv(i,ll) = (2.0*s*da)/dy(bundle(i,:),0.0)
                 end if
                 
@@ -180,6 +183,36 @@ subroutine evalf(y, f)
         end associate
 end subroutine evalf
 
+! deviation equation d delta/dt = K(y).delta
+subroutine evald(y, K)
+        real y(n), K(n,n)
+        
+        ! unpack dynamical system vector
+        associate(fi => y($fi$), pi => y($pi$), a => y($a$), p => y($p$))
+        
+        K($fi$,$fi$) = 0.0
+        K($fi$,$pi$) = 1.0/a**2
+        K($fi$,$a$)  = -2.0*pi/a**3
+        K($fi$,$p$)  = 0.0
+        
+        K($pi$,$fi$) = -a**4 * reshape(M2D(fi(phi),fi(chi)), [fields,fields])
+        K($pi$,$pi$) = 0.0
+        K($pi$,$a$)  = -4.0*a**3 * M2I(fi(phi),fi(chi)) * fi
+        K($pi$,$p$)  = 0.0
+        
+        K($a$,$fi$) = 0.0
+        K($a$,$pi$) = 0.0
+        K($a$,$a$)  = 0.0
+        K($a$,$p$)  = -1.0/6.0
+        
+        K($p$,$fi$) = -4.0*a**3 * M2I(fi(phi),fi(chi)) * fi
+        K($p$,$pi$) = 2.0*pi/a**3
+        K($p$,$a$)  = -3.0*sum(pi**2)/a**4 - 3.0*Vx4(fi(phi),fi(chi))*a**2
+        K($p$,$p$)  = 0.0
+        
+        end associate
+end subroutine evald
+
 ! Hamiltonian constraint violation
 function omegak(y)
         real y(n), omegak, P2, KE, PE
@@ -197,6 +230,22 @@ function omegak(y)
         
         end associate
 end function omegak
+
+! Kolmogorov-Sinai entropy rate
+function entropy(y)
+        integer, parameter :: l = 10*n; integer status
+        real entropy, y(n), kappa(n), omega(n), K(n,n), U(n,n), V(n,n), W(l)
+        
+        ! find eigenvalues of deviation matrix
+        call evald(y, K); status = 0
+        call dgeev('N', 'N', n, K, n, kappa, omega, U, n, V, n, W, l, status)
+        
+        ! bail at first sign of trouble
+        if (status /= 0) call abort
+        
+        ! Kolmogorov-Sinai entropy
+        entropy = sum(kappa, kappa>0.0)
+end function entropy
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
